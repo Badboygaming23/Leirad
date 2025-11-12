@@ -129,6 +129,17 @@ export interface ValueProposition {
   description: string;
 }
 
+export type ResellerApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ResellerApplication {
+  id: string;
+  userId: string;
+  userEmail: string;
+  reason: string;
+  status: ResellerApplicationStatus;
+  createdAt: string; // ISO Date string
+}
+
 export interface Article {
   id: string;
   title: string;

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AnimatedPage from '../components/ui/AnimatedPage';
 import Breadcrumb from '../components/ui/Breadcrumb';
-import { User, Lock, Home, Save, UserCog, ShieldCheck, Phone } from 'lucide-react';
+import { User, Lock, Home, Save, UserCog, ShieldCheck, Phone, Briefcase, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
 import { ShippingInfo } from '../types';
@@ -17,6 +17,77 @@ const InputField = ({ icon, ...props }: { icon: React.ReactNode; [key: string]: 
         <input {...props} className="block w-full rounded-md border-slate-300 bg-slate-50/50 py-3 pl-10 pr-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
     </div>
 );
+
+const ResellerApplicationForm: React.FC = () => {
+    const { user, resellerApplications, submitResellerApplication } = useAppContext();
+    const [reason, setReason] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const myApplication = useMemo(() => {
+        if (!user) return null;
+        return resellerApplications.find(app => app.userId === user.id);
+    }, [user, resellerApplications]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!reason) {
+            toast.error("Please provide a reason for your application.");
+            return;
+        }
+        setIsLoading(true);
+        await submitResellerApplication(reason);
+        setIsLoading(false);
+    };
+
+    if (myApplication && myApplication.status === 'pending') {
+        return (
+            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
+                <Clock className="mx-auto h-12 w-12 text-blue-500" />
+                <h3 className="mt-4 text-lg font-bold text-blue-800">Application Submitted</h3>
+                <p className="mt-2 text-sm text-blue-700">Your reseller application is currently under review by our team. We'll notify you once a decision has been made.</p>
+                <div className="mt-4 text-left text-sm bg-white p-4 rounded-md">
+                    <p className="font-semibold text-slate-700">Your reason:</p>
+                    <p className="text-slate-600 mt-1 italic">"{myApplication.reason}"</p>
+                </div>
+            </div>
+        );
+    }
+    
+     if (myApplication && myApplication.status === 'approved') {
+        return (
+            <div className="bg-green-50 p-6 rounded-lg border border-green-200 text-center">
+                <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+                <h3 className="mt-4 text-lg font-bold text-green-800">Application Approved!</h3>
+                <p className="mt-2 text-sm text-green-700">Congratulations! Your account has been upgraded to a reseller. You can now access the reseller dashboard.</p>
+            </div>
+        );
+    }
+
+    return (
+        <form onSubmit={handleSubmit}>
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3"><Briefcase /> Become a Reseller</h2>
+            <p className="text-sm text-slate-500 mt-2 mb-6">
+                {myApplication?.status === 'rejected'
+                    ? "Your previous application was not approved. You are welcome to re-apply with more details."
+                    : "Apply to sell your products on our platform. Tell us a bit about your business."
+                }
+            </p>
+            <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                rows={5}
+                required
+                placeholder="Tell us about your business, the products you want to sell, and why you'd be a great fit for Luxe."
+                className="block w-full rounded-md border-slate-300 bg-slate-50/50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            />
+            <div className="flex justify-end pt-6 mt-4 border-t border-slate-200">
+                <Button type="submit" isLoading={isLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2">
+                    Submit Application
+                </Button>
+            </div>
+        </form>
+    );
+};
 
 
 const MyProfilePage: React.FC = () => {
@@ -107,11 +178,17 @@ const MyProfilePage: React.FC = () => {
         setIsShippingLoading(false);
     };
 
-    const tabs = [
+    const baseTabs = [
         { id: 'details', label: 'Account Details', icon: <UserCog size={18} /> },
         { id: 'shipping', label: 'Shipping Information', icon: <Home size={18} /> },
         { id: 'security', label: 'Security', icon: <ShieldCheck size={18} /> },
     ];
+    
+    if (user?.role === 'customer') {
+        baseTabs.push({ id: 'reseller', label: 'Reseller Program', icon: <Briefcase size={18} /> });
+    }
+
+    const tabs = baseTabs;
 
     const tabContentVariants = {
         initial: { opacity: 0, y: 10 },
@@ -238,6 +315,7 @@ const MyProfilePage: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
+                                     {activeTab === 'reseller' && <ResellerApplicationForm />}
                                 </motion.div>
                             </AnimatePresence>
                         </div>

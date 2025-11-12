@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Store, Gift, ShieldCheck, Truck, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Gift, ShieldCheck, Truck, ArrowRight, Briefcase } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import ProductCard from '../components/products/ProductCard';
 import AnimatedPage from '../components/ui/AnimatedPage';
@@ -33,7 +33,7 @@ const iconMap: { [key: string]: React.ReactNode } = {
 };
 
 const HomePage: React.FC = () => {
-  const { products, stores, carouselSlides, advertisements, isLoading, valuePropositions, articles } = useAppContext();
+  const { products, stores, carouselSlides, advertisements, isLoading, valuePropositions, articles, user } = useAppContext();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
   
@@ -209,6 +209,37 @@ const HomePage: React.FC = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Become a Reseller Section */}
+      {user?.role === 'customer' && (
+         <section className="py-16 sm:py-24 bg-indigo-700">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5 }}
+                >
+                    <Briefcase className="mx-auto h-12 w-12 text-white opacity-80" />
+                    <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white">
+                        Ready to Sell With Us?
+                    </h2>
+                    <p className="mt-4 max-w-2xl mx-auto text-lg text-indigo-200">
+                        Join our community of resellers and start your own store on the Luxe platform. Reach new customers and grow your business.
+                    </p>
+                    <Link to="/profile">
+                        <motion.div
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="mt-8 inline-block bg-white border border-transparent rounded-md py-3 px-8 text-base font-medium text-indigo-600 hover:bg-indigo-50 shadow-md"
+                        >
+                            Become a Reseller
+                        </motion.div>
+                    </Link>
+                </motion.div>
+            </div>
+         </section>
+      )}
 
        {/* Articles Section */}
       <section className="py-16 sm:py-24 bg-slate-50/50 backdrop-blur-sm">

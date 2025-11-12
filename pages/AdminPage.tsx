@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { useAppContext } from '../context/AppContext';
-import { Product, User, Store, CarouselSlide, Advertisement, Order, OrderStatus, Announcement, WalletTransaction, WalletTransactionStatus, Coupon } from '../types';
+import { useAppContext } from '../../context/AppContext';
+// FIX: Added `ResellerApplicationStatus` to the import to be used in the `getStatusColor` function.
+import { Product, User, Store, CarouselSlide, Advertisement, Order, OrderStatus, Announcement, WalletTransaction, WalletTransactionStatus, Coupon, ResellerApplication, ResellerApplicationStatus } from '../types';
 import AnimatedPage from '../components/ui/AnimatedPage';
 import Breadcrumb from '../components/ui/Breadcrumb';
-import { Users, ShoppingBag, Home, MonitorPlay, Megaphone, Plus, Package, Bell, LayoutDashboard, Wallet, Check, X, Ticket, Menu } from 'lucide-react';
+import { Users, ShoppingBag, Home, MonitorPlay, Megaphone, Plus, Package, Bell, LayoutDashboard, Wallet, Check, X, Ticket, Menu, Briefcase, ClipboardCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ConfirmationModal from '../components/ui/ConfirmationModal';
@@ -19,7 +20,7 @@ import DashboardOverview from './admin/DashboardOverview';
 import OrderDetailsModal from '../components/admin/OrderDetailsModal';
 import AdminSidebar from '../components/admin/AdminSidebar';
 
-type AdminTab = 'overview' | 'users' | 'stores' | 'products' | 'carousel' | 'ads' | 'orders' | 'announcements' | 'wallet' | 'coupons';
+type AdminTab = 'overview' | 'users' | 'stores' | 'products' | 'carousel' | 'ads' | 'orders' | 'announcements' | 'wallet' | 'coupons' | 'resellerApps';
 type ModalMode = 'add' | 'edit';
 type ModalType = Exclude<AdminTab, 'overview'>;
 
@@ -30,7 +31,8 @@ interface ModalState {
   data?: any;
 }
 
-const getStatusColor = (status: OrderStatus | WalletTransactionStatus) => ({
+// FIX: Widened the type of `status` to include `ResellerApplicationStatus`.
+const getStatusColor = (status: OrderStatus | WalletTransactionStatus | ResellerApplicationStatus) => ({
     'Pending': 'bg-yellow-100 text-yellow-800',
     'Processing': 'bg-blue-100 text-blue-800',
     'Shipped': 'bg-indigo-100 text-indigo-800',
@@ -38,6 +40,9 @@ const getStatusColor = (status: OrderStatus | WalletTransactionStatus) => ({
     'Cancelled': 'bg-red-100 text-red-800',
     'Approved': 'bg-green-100 text-green-800',
     'Rejected': 'bg-red-100 text-red-800',
+    'pending': 'bg-yellow-100 text-yellow-800',
+    'approved': 'bg-green-100 text-green-800',
+    'rejected': 'bg-red-100 text-red-800',
 }[status]);
 
 const AdminPage: React.FC = () => {
@@ -51,6 +56,7 @@ const AdminPage: React.FC = () => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // For mobile view
     
     const [transactionToConfirm, setTransactionToConfirm] = useState<{ id: string, action: 'approve' | 'reject' } | null>(null);
+    const [applicationToConfirm, setApplicationToConfirm] = useState<{ id: string, action: 'approve' | 'reject' } | null>(null);
 
     const tabs: { id: AdminTab; name: string; icon: React.ReactNode; data?: any[]; columns?: any[], canAdd?: boolean, canDelete?: boolean }[] = useMemo(() => [
         { id: 'overview', name: 'Overview', icon: <LayoutDashboard size={20} /> },
@@ -98,6 +104,21 @@ const AdminPage: React.FC = () => {
                     <div className="flex gap-2">
                         <button onClick={() => setTransactionToConfirm({ id: item.id, action: 'approve' })} className="p-1 text-green-600 hover:text-green-800"><Check size={16} /></button>
                         <button onClick={() => setTransactionToConfirm({ id: item.id, action: 'reject' })} className="p-1 text-red-600 hover:text-red-800"><X size={16} /></button>
+                    </div>
+                )}
+            ]
+        },
+         {
+            id: 'resellerApps', name: 'Reseller Apps', icon: <Briefcase size={20} />, data: context.resellerApplications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), canAdd: false, canDelete: false,
+            columns: [
+                { header: 'Applicant', accessor: 'userEmail' },
+                { header: 'Reason', accessor: 'reason', render: (item: ResellerApplication) => <p className="line-clamp-2 text-xs w-48">{item.reason}</p> },
+                { header: 'Date', accessor: 'createdAt', render: (item: ResellerApplication) => new Date(item.createdAt).toLocaleString() },
+                { header: 'Status', accessor: 'status', render: (item: ResellerApplication) => <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(item.status)}`}>{item.status}</span> },
+                { header: 'Actions', accessor: 'actions', render: (item: ResellerApplication) => item.status === 'pending' && (
+                    <div className="flex gap-2">
+                        <button onClick={() => setApplicationToConfirm({ id: item.id, action: 'approve' })} className="p-1 text-green-600 hover:text-green-800"><ClipboardCheck size={16} /></button>
+                        <button onClick={() => setApplicationToConfirm({ id: item.id, action: 'reject' })} className="p-1 text-red-600 hover:text-red-800"><X size={16} /></button>
                     </div>
                 )}
             ]
@@ -178,6 +199,18 @@ const AdminPage: React.FC = () => {
         }
         setIsLoadingConfirm(false);
         setTransactionToConfirm(null);
+    };
+
+    const handleConfirmApplication = async () => {
+        if (!applicationToConfirm) return;
+        setIsLoadingConfirm(true);
+        if (applicationToConfirm.action === 'approve') {
+            await context.approveResellerApplication(applicationToConfirm.id);
+        } else {
+            await context.rejectResellerApplication(applicationToConfirm.id);
+        }
+        setIsLoadingConfirm(false);
+        setApplicationToConfirm(null);
     };
 
     const handleViewOrder = (order: Order) => setViewingOrder(order);
@@ -270,6 +303,15 @@ const AdminPage: React.FC = () => {
                 title={`${transactionToConfirm?.action === 'approve' ? 'Approve' : 'Reject'} Transaction`}
                 message={`Are you sure you want to ${transactionToConfirm?.action} this transaction?`}
                 confirmText={transactionToConfirm?.action === 'approve' ? 'Approve' : 'Reject'}
+            />
+             <ConfirmationModal
+                isOpen={!!applicationToConfirm}
+                onClose={() => setApplicationToConfirm(null)}
+                onConfirm={handleConfirmApplication}
+                isConfirming={isLoadingConfirm}
+                title={`${applicationToConfirm?.action === 'approve' ? 'Approve' : 'Reject'} Application`}
+                message={`Are you sure you want to ${applicationToConfirm?.action} this reseller application?`}
+                confirmText={applicationToConfirm?.action === 'approve' ? 'Approve' : 'Reject'}
             />
         </AnimatedPage>
     );

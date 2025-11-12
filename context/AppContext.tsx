@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
-import { Product, CartItem, User, Store, CarouselSlide, Advertisement, UserRole, Order, OrderStatus, OrderItem, ShippingInfo, PaymentMethod, Review, Announcement, WalletTransaction, WalletTransactionStatus, ValueProposition, Article, Coupon } from '../types';
+import { Product, CartItem, User, Store, CarouselSlide, Advertisement, UserRole, Order, OrderStatus, OrderItem, ShippingInfo, PaymentMethod, Review, Announcement, WalletTransaction, WalletTransactionStatus, ValueProposition, Article, Coupon, ResellerApplication } from '../types';
 import toast from 'react-hot-toast';
 
 // --- API SIMULATION ---
@@ -185,6 +185,12 @@ interface AppContextType {
   applyCoupon: (code: string) => void;
   removeCoupon: () => void;
 
+  // Reseller Applications
+  resellerApplications: ResellerApplication[];
+  submitResellerApplication: (reason: string) => Promise<void>;
+  approveResellerApplication: (applicationId: string) => Promise<void>;
+  rejectResellerApplication: (applicationId: string) => Promise<void>;
+
   // Homepage Content
   valuePropositions: ValueProposition[];
   articles: Article[];
@@ -224,6 +230,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [articles] = useState<Article[]>(() => getInitialState('luxe_articles', mockArticles));
   const [coupons, setCoupons] = useState<Coupon[]>(() => getInitialState('luxe_coupons', mockCoupons));
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(() => getInitialState('luxe_applied_coupon', null));
+  const [resellerApplications, setResellerApplications] = useState<ResellerApplication[]>(() => getInitialState('luxe_reseller_apps', []));
 
 
   // Simulate initial data loading
@@ -249,6 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => { localStorage.setItem('luxe_value_propositions', JSON.stringify(valuePropositions)); }, [valuePropositions]);
   useEffect(() => { localStorage.setItem('luxe_articles', JSON.stringify(articles)); }, [articles]);
   useEffect(() => { localStorage.setItem('luxe_coupons', JSON.stringify(coupons)); }, [coupons]);
+  useEffect(() => { localStorage.setItem('luxe_reseller_apps', JSON.stringify(resellerApplications)); }, [resellerApplications]);
   useEffect(() => {
     if (appliedCoupon) localStorage.setItem('luxe_applied_coupon', JSON.stringify(appliedCoupon));
     else localStorage.removeItem('luxe_applied_coupon');
@@ -793,6 +801,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     toast.error("Announcement removed.");
   };
 
+  const submitResellerApplication = async (reason: string) => {
+    await simulateApiCall();
+    if (!user || user.role !== 'customer') {
+      toast.error('Only customers can apply to be a reseller.');
+      return;
+    }
+    if (resellerApplications.some(app => app.userId === user.id && app.status === 'pending')) {
+        toast.error('You already have a pending application.');
+        return;
+    }
+    const newApplication: ResellerApplication = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        userEmail: user.email,
+        reason,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+    };
+    setResellerApplications(prev => [newApplication, ...prev.filter(app => app.userId !== user.id)]);
+    toast.success('Your reseller application has been submitted!');
+  };
+
+  const approveResellerApplication = async (applicationId: string) => {
+    await simulateApiCall();
+    if (user?.role !== 'admin') { toast.error("Permission denied."); return; }
+
+    const application = resellerApplications.find(app => app.id === applicationId);
+    if (!application) { toast.error("Application not found."); return; }
+
+    setResellerApplications(prev => prev.map(app => app.id === applicationId ? { ...app, status: 'approved' } : app));
+    setUsers(prev => prev.map(u => u.id === application.userId ? { ...u, role: 'reseller' } : u));
+
+    toast.success(`Application for ${application.userEmail} approved.`);
+  };
+  
+  const rejectResellerApplication = async (applicationId: string) => {
+    await simulateApiCall();
+    if (user?.role !== 'admin') { toast.error("Permission denied."); return; }
+
+    const application = resellerApplications.find(app => app.id === applicationId);
+    if (!application) { toast.error("Application not found."); return; }
+
+    setResellerApplications(prev => prev.map(app => app.id === applicationId ? { ...app, status: 'rejected' } : app));
+    toast.error(`Application for ${application.userEmail} rejected.`);
+  };
+
   const cartCount = cart.reduce((count, item) => count + item.quantity, 0);
   const wishlistCount = wishlist.length;
 
@@ -812,6 +866,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reviews, addReview,
         announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
         coupons, appliedCoupon, addCoupon, updateCoupon, deleteCoupon, applyCoupon, removeCoupon,
+        resellerApplications, submitResellerApplication, approveResellerApplication, rejectResellerApplication,
         valuePropositions,
         articles,
       }}
