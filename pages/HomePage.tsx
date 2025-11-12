@@ -26,6 +26,28 @@ const slideVariants = {
   }),
 };
 
+// New variants for store carousel
+const storeCarouselVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? '100%' : '-100%',
+    opacity: 0,
+    position: 'absolute',
+  }),
+  center: {
+    zIndex: 1,
+    x: 0,
+    opacity: 1,
+    position: 'relative',
+  },
+  exit: (direction: number) => ({
+    zIndex: 0,
+    x: direction < 0 ? '100%' : '-100%',
+    opacity: 0,
+    position: 'absolute',
+  }),
+};
+
+
 const iconMap: { [key: string]: React.ReactNode } = {
   Gift: <Gift className="h-8 w-8 text-white" />,
   ShieldCheck: <ShieldCheck className="h-8 w-8 text-white" />,
@@ -36,6 +58,18 @@ const HomePage: React.FC = () => {
   const { products, stores, carouselSlides, advertisements, isLoading, valuePropositions, articles, user } = useAppContext();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
+  
+  // State for store carousel
+  const [storePage, setStorePage] = useState(0);
+  const [storeDirection, setStoreDirection] = useState(1);
+
+  const STORES_PER_PAGE = 3;
+  const totalStorePages = Math.ceil(stores.length / STORES_PER_PAGE);
+
+  const paginateStores = (newDirection: number) => {
+    setStoreDirection(newDirection);
+    setStorePage(prev => prev + newDirection);
+  };
   
   const paginate = (newDirection: number) => {
     setDirection(newDirection);
@@ -146,25 +180,55 @@ const HomePage: React.FC = () => {
               <h2 className="text-3xl font-extrabold tracking-tight text-center text-slate-900">Discover Our Stores</h2>
               <p className="mt-4 max-w-2xl mx-auto text-center text-lg text-slate-500">Shop from our curated collection of independent resellers.</p>
             </motion.div>
-            <div className="mt-12 grid grid-cols-1 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
-              {stores.map((store, index) => (
-                <motion.div
-                  key={store.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
-                >
-                  <Link to={`/store/${store.id}`} className="group block">
-                    <div className="flex flex-col items-center text-center p-6 bg-slate-100/80 backdrop-blur-md rounded-lg shadow-md hover:shadow-xl transition-shadow border border-slate-200/50">
-                      <img src={store.logoUrl} alt={`${store.name} logo`} className="w-24 h-24 rounded-full object-cover mb-4"/>
-                      <h3 className="text-lg font-bold text-slate-800">{store.name}</h3>
-                      <p className="text-sm text-slate-500 mt-1">{store.description}</p>
-                      <span className="mt-4 text-sm font-semibold text-indigo-600 group-hover:underline">Visit Store &rarr;</span>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
+            <div className="mt-12 relative h-[270px]">
+                <AnimatePresence initial={false} custom={storeDirection}>
+                    <motion.div
+                        key={storePage}
+                        custom={storeDirection}
+                        variants={storeCarouselVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.2 } }}
+                        className="w-full h-full top-0 left-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+                    >
+                        {stores.slice(storePage * STORES_PER_PAGE, storePage * STORES_PER_PAGE + STORES_PER_PAGE).map((store) => (
+                            <div key={store.id}>
+                                <Link to={`/store/${store.id}`} className="group block h-full">
+                                    <div className="flex flex-col items-center text-center p-6 bg-slate-100/80 backdrop-blur-md rounded-lg shadow-md hover:shadow-xl transition-shadow border border-slate-200/50 h-full">
+                                        <img src={store.logoUrl} alt={`${store.name} logo`} className="w-24 h-24 rounded-full object-cover mb-4 flex-shrink-0"/>
+                                        <div className="flex flex-col flex-grow">
+                                            <h3 className="text-lg font-bold text-slate-800">{store.name}</h3>
+                                            <p className="text-sm text-slate-500 mt-1 flex-grow">{store.description}</p>
+                                            <span className="mt-4 text-sm font-semibold text-indigo-600 group-hover:underline">Visit Store &rarr;</span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            </div>
+                        ))}
+                    </motion.div>
+                </AnimatePresence>
+
+                {totalStorePages > 1 && (
+                    <>
+                        <button
+                            onClick={() => paginateStores(-1)}
+                            disabled={storePage === 0}
+                            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 p-2 bg-white rounded-full shadow-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Previous stores"
+                        >
+                            <ChevronLeft className="h-6 w-6 text-slate-800" />
+                        </button>
+                        <button
+                            onClick={() => paginateStores(1)}
+                            disabled={storePage >= totalStorePages - 1}
+                            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 p-2 bg-white rounded-full shadow-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            aria-label="Next stores"
+                        >
+                            <ChevronRight className="h-6 w-6 text-slate-800" />
+                        </button>
+                    </>
+                )}
             </div>
           </div>
         </section>
@@ -227,7 +291,7 @@ const HomePage: React.FC = () => {
                     <p className="mt-4 max-w-2xl mx-auto text-lg text-indigo-200">
                         Join our community of resellers and start your own store on the Luxe platform. Reach new customers and grow your business.
                     </p>
-                    <Link to="/profile">
+                    <Link to="/become-a-reseller">
                         <motion.div
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}

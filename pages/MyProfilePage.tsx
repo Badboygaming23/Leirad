@@ -1,99 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AnimatedPage from '../components/ui/AnimatedPage';
 import Breadcrumb from '../components/ui/Breadcrumb';
-import { User, Lock, Home, Save, UserCog, ShieldCheck, Phone, Briefcase, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { User, Lock, Home, Save, UserCog, ShieldCheck, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
 import { ShippingInfo } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Input Field with Icon Component
-const InputField = ({ icon, ...props }: { icon: React.ReactNode; [key: string]: any }) => (
-    <div className="relative">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-            {icon}
-        </div>
-        <input {...props} className="block w-full rounded-md border-slate-300 bg-slate-50/50 py-3 pl-10 pr-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-    </div>
-);
-
-const ResellerApplicationForm: React.FC = () => {
-    const { user, resellerApplications, submitResellerApplication } = useAppContext();
-    const [reason, setReason] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-
-    const myApplication = useMemo(() => {
-        if (!user) return null;
-        return resellerApplications.find(app => app.userId === user.id);
-    }, [user, resellerApplications]);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!reason) {
-            toast.error("Please provide a reason for your application.");
-            return;
-        }
-        setIsLoading(true);
-        await submitResellerApplication(reason);
-        setIsLoading(false);
-    };
-
-    if (myApplication && myApplication.status === 'pending') {
-        return (
-            <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center">
-                <Clock className="mx-auto h-12 w-12 text-blue-500" />
-                <h3 className="mt-4 text-lg font-bold text-blue-800">Application Submitted</h3>
-                <p className="mt-2 text-sm text-blue-700">Your reseller application is currently under review by our team. We'll notify you once a decision has been made.</p>
-                <div className="mt-4 text-left text-sm bg-white p-4 rounded-md">
-                    <p className="font-semibold text-slate-700">Your reason:</p>
-                    <p className="text-slate-600 mt-1 italic">"{myApplication.reason}"</p>
-                </div>
-            </div>
-        );
-    }
-    
-     if (myApplication && myApplication.status === 'approved') {
-        return (
-            <div className="bg-green-50 p-6 rounded-lg border border-green-200 text-center">
-                <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-                <h3 className="mt-4 text-lg font-bold text-green-800">Application Approved!</h3>
-                <p className="mt-2 text-sm text-green-700">Congratulations! Your account has been upgraded to a reseller. You can now access the reseller dashboard.</p>
-            </div>
-        );
-    }
-
-    return (
-        <form onSubmit={handleSubmit}>
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3"><Briefcase /> Become a Reseller</h2>
-            <p className="text-sm text-slate-500 mt-2 mb-6">
-                {myApplication?.status === 'rejected'
-                    ? "Your previous application was not approved. You are welcome to re-apply with more details."
-                    : "Apply to sell your products on our platform. Tell us a bit about your business."
-                }
-            </p>
-            <textarea
-                value={reason}
-                onChange={e => setReason(e.target.value)}
-                rows={5}
-                required
-                placeholder="Tell us about your business, the products you want to sell, and why you'd be a great fit for Luxe."
-                className="block w-full rounded-md border-slate-300 bg-slate-50/50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-            />
-            <div className="flex justify-end pt-6 mt-4 border-t border-slate-200">
-                <Button type="submit" isLoading={isLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2">
-                    Submit Application
-                </Button>
-            </div>
-        </form>
-    );
-};
-
+import InputField from '../components/ui/InputField';
 
 const MyProfilePage: React.FC = () => {
     const crumbs = [{ name: 'Home', path: '/' }, { name: 'My Profile', path: '/profile' }];
     const [activeTab, setActiveTab] = useState('details');
-    const { user, updatePassword, updateShippingInfo, updateProfile } = useAppContext();
+    const { user, updatePassword, updateShippingInfo, updateProfile, updatePin } = useAppContext();
 
     // State for account details form
     const [profileData, setProfileData] = useState({ firstName: '', middleName: '', lastName: '' });
@@ -105,6 +24,15 @@ const MyProfilePage: React.FC = () => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isPasswordLoading, setIsPasswordLoading] = useState(false);
+
+    // State for PIN form
+    const [pinData, setPinData] = useState({
+        currentPin: '',
+        newPin: '',
+        confirmNewPin: '',
+        currentPassword: '',
+    });
+    const [isPinLoading, setIsPinLoading] = useState(false);
 
     // State for shipping form
     const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
@@ -166,6 +94,32 @@ const MyProfilePage: React.FC = () => {
         }
     };
 
+    // Handlers for PIN form
+    const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        if (name !== 'currentPassword') {
+            setPinData(prev => ({ ...prev, [name]: value.replace(/[^0-9]/g, '') }));
+        } else {
+            setPinData(prev => ({ ...prev, [name]: value }));
+        }
+    };
+
+    const handlePinSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const { currentPin, newPin, confirmNewPin, currentPassword } = pinData;
+        setIsPinLoading(true);
+        const success = await updatePin(currentPin, newPin, confirmNewPin, currentPassword);
+        setIsPinLoading(false);
+        if (success) {
+            setPinData({
+                currentPin: '',
+                newPin: '',
+                confirmNewPin: '',
+                currentPassword: '',
+            });
+        }
+    };
+
     // Handlers for shipping form
     const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setShippingInfo(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -178,17 +132,11 @@ const MyProfilePage: React.FC = () => {
         setIsShippingLoading(false);
     };
 
-    const baseTabs = [
+    const tabs = [
         { id: 'details', label: 'Account Details', icon: <UserCog size={18} /> },
         { id: 'shipping', label: 'Shipping Information', icon: <Home size={18} /> },
         { id: 'security', label: 'Security', icon: <ShieldCheck size={18} /> },
     ];
-    
-    if (user?.role === 'customer') {
-        baseTabs.push({ id: 'reseller', label: 'Reseller Program', icon: <Briefcase size={18} /> });
-    }
-
-    const tabs = baseTabs;
 
     const tabContentVariants = {
         initial: { opacity: 0, y: 10 },
@@ -307,6 +255,24 @@ const MyProfilePage: React.FC = () => {
                                                     </Button>
                                                 </div>
                                             </form>
+
+                                            {user?.pin && (
+                                                <div className="mt-8 border-t border-slate-200 pt-8">
+                                                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3"><ShieldCheck /> Change Security PIN</h2>
+                                                     <form onSubmit={handlePinSubmit} className="mt-6 space-y-4">
+                                                        <InputField icon={<ShieldCheck size={18} className="text-slate-400"/>} type="password" name="currentPin" value={pinData.currentPin} onChange={handlePinChange} placeholder="Current 6-Digit PIN" maxLength={6} required autoComplete="off" />
+                                                        <InputField icon={<ShieldCheck size={18} className="text-slate-400"/>} type="password" name="newPin" value={pinData.newPin} onChange={handlePinChange} placeholder="New 6-Digit PIN" maxLength={6} required autoComplete="off" />
+                                                        <InputField icon={<ShieldCheck size={18} className="text-slate-400"/>} type="password" name="confirmNewPin" value={pinData.confirmNewPin} onChange={handlePinChange} placeholder="Confirm New PIN" maxLength={6} required autoComplete="off" />
+                                                        <InputField icon={<Lock size={18} className="text-slate-400"/>} type="password" name="currentPassword" value={pinData.currentPassword} onChange={handlePinChange} placeholder="Current Account Password" required autoComplete="current-password" />
+                                                        <div className="flex justify-end pt-2">
+                                                            <Button type="submit" isLoading={isPinLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2">
+                                                                <Save size={18}/> Update PIN
+                                                            </Button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            )}
+
                                             <div className="mt-8 bg-blue-50 p-4 rounded-lg border border-blue-200">
                                                 <h3 className="text-md font-bold text-blue-800 flex items-center gap-2"><ShieldCheck size={18} /> Security Tip</h3>
                                                 <p className="text-sm text-blue-700 mt-2">
@@ -315,7 +281,6 @@ const MyProfilePage: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-                                     {activeTab === 'reseller' && <ResellerApplicationForm />}
                                 </motion.div>
                             </AnimatePresence>
                         </div>

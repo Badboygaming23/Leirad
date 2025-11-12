@@ -11,10 +11,10 @@ const TAX_RATE = 0.04; // 4% tax/service fee
 
 // --- MOCK DATA ---
 const mockUsers: User[] = [
-  { id: 'user-1', email: 'admin@luxe.com', firstName: 'Admin', lastName: 'User', password: 'password', role: 'admin', walletBalance: 1000 },
-  { id: 'user-2', email: 'reseller@luxe.com', firstName: 'Reseller', lastName: 'User', password: 'password', role: 'reseller', walletBalance: 50 },
+  { id: 'user-1', email: 'admin@luxe.com', firstName: 'Admin', lastName: 'User', password: 'password', role: 'admin', walletBalance: 1000, pin: '123456' },
+  { id: 'user-2', email: 'reseller@luxe.com', firstName: 'Reseller', lastName: 'User', password: 'password', role: 'reseller', walletBalance: 50, pin: '112233' },
   { id: 'user-3', email: 'customer@luxe.com', firstName: 'Customer', lastName: 'User', password: 'password', role: 'customer', walletBalance: 150.75 },
-  { id: 'user-4', email: 'storeowner@luxe.com', firstName: 'Store', lastName: 'Owner', password: 'password', role: 'reseller', walletBalance: 200 },
+  { id: 'user-4', email: 'storeowner@luxe.com', firstName: 'Store', lastName: 'Owner', password: 'password', role: 'reseller', walletBalance: 200, pin: '654321' },
 ];
 
 const mockStores: Store[] = [
@@ -129,6 +129,8 @@ interface AppContextType {
   updatePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   updateShippingInfo: (shippingInfo: ShippingInfo) => Promise<void>;
   updateProfile: (profileData: { firstName: string; middleName: string; lastName: string; }) => Promise<void>;
+  setPin: (newPin: string, confirmPin: string, currentPassword: string) => Promise<boolean>;
+  updatePin: (currentPin: string, newPin: string, confirmNewPin: string, currentPassword: string) => Promise<boolean>;
   
   // Wallet
   walletTransactions: WalletTransaction[];
@@ -187,7 +189,7 @@ interface AppContextType {
 
   // Reseller Applications
   resellerApplications: ResellerApplication[];
-  submitResellerApplication: (reason: string) => Promise<void>;
+  submitResellerApplication: (data: { storeName: string; storeDescription: string; storeLogoUrl: string; shippingInfo: ShippingInfo; currentPassword: string; }) => Promise<void>;
   approveResellerApplication: (applicationId: string) => Promise<void>;
   rejectResellerApplication: (applicationId: string) => Promise<void>;
 
@@ -394,6 +396,62 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUser(updatedUser);
     setUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
     toast.success("Shipping information saved.");
+  };
+
+  const setPin = async (newPin: string, confirmPin: string, currentPassword: string): Promise<boolean> => {
+    await simulateApiCall();
+    if (!user) {
+        toast.error("You must be logged in.");
+        return false;
+    }
+    if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+        toast.error("PIN must be 6 digits.");
+        return false;
+    }
+    if (newPin !== confirmPin) {
+        toast.error("PINs do not match.");
+        return false;
+    }
+    if (user.password !== currentPassword) {
+        toast.error("Incorrect password.");
+        return false;
+    }
+
+    const updatedUser = { ...user, pin: newPin };
+    setUser(updatedUser);
+    setUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
+    toast.success("Security PIN created successfully!");
+    return true;
+  };
+
+  const updatePin = async (currentPin: string, newPin: string, confirmNewPin: string, currentPassword: string): Promise<boolean> => {
+    await simulateApiCall();
+    if (!user) {
+        toast.error("You must be logged in.");
+        return false;
+    }
+    if (user.pin !== currentPin) {
+        toast.error("Current PIN is incorrect.");
+        return false;
+    }
+    if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+        toast.error("New PIN must be 6 digits.");
+        return false;
+    }
+    if (newPin !== confirmNewPin) {
+        toast.error("New PINs do not match.");
+        return false;
+    }
+    if (user.password !== currentPassword) {
+        toast.error("Incorrect password.");
+        return false;
+    }
+
+    const updatedUser = { ...user, pin: newPin };
+    setUser(updatedUser);
+    setUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
+    toast.success("Security PIN updated successfully!");
+    return true;
   };
 
   const requestWalletFunds = async (amount: number) => {
@@ -801,21 +859,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     toast.error("Announcement removed.");
   };
 
-  const submitResellerApplication = async (reason: string) => {
+  const submitResellerApplication = async (applicationData: { storeName: string; storeDescription: string; storeLogoUrl: string; shippingInfo: ShippingInfo; currentPassword: string; }) => {
     await simulateApiCall();
     if (!user || user.role !== 'customer') {
-      toast.error('Only customers can apply to be a reseller.');
+      toast.error('Only customers can apply.');
       return;
+    }
+    if (user.password !== applicationData.currentPassword) {
+        toast.error('Incorrect password. Please verify your identity.');
+        return;
     }
     if (resellerApplications.some(app => app.userId === user.id && app.status === 'pending')) {
         toast.error('You already have a pending application.');
         return;
     }
+    
+    const updatedUser = { ...user, savedShippingInfo: applicationData.shippingInfo };
+    setUser(updatedUser);
+    setUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
+
     const newApplication: ResellerApplication = {
         id: crypto.randomUUID(),
         userId: user.id,
         userEmail: user.email,
-        reason,
+        storeName: applicationData.storeName,
+        storeDescription: applicationData.storeDescription,
+        storeLogoUrl: applicationData.storeLogoUrl,
+        shippingInfo: applicationData.shippingInfo,
         status: 'pending',
         createdAt: new Date().toISOString(),
     };
@@ -830,10 +900,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const application = resellerApplications.find(app => app.id === applicationId);
     if (!application) { toast.error("Application not found."); return; }
 
-    setResellerApplications(prev => prev.map(app => app.id === applicationId ? { ...app, status: 'approved' } : app));
-    setUsers(prev => prev.map(u => u.id === application.userId ? { ...u, role: 'reseller' } : u));
+    // Create the new store
+    const newStore: Store = {
+      id: crypto.randomUUID(),
+      name: application.storeName,
+      description: application.storeDescription,
+      logoUrl: application.storeLogoUrl,
+      ownerId: application.userId,
+    };
+    setStores(prev => [...prev, newStore]);
 
-    toast.success(`Application for ${application.userEmail} approved.`);
+    // Update application status and user role
+    setResellerApplications(prev => prev.map(app => app.id === applicationId ? { ...app, status: 'approved' } : app));
+    setUsers(prev => prev.map(u => u.id === application.userId ? { ...u, role: 'reseller', savedShippingInfo: application.shippingInfo } : u));
+
+    toast.success(`Application for ${application.userEmail} approved. Store "${newStore.name}" created.`);
   };
   
   const rejectResellerApplication = async (applicationId: string) => {
@@ -856,7 +937,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isLoading,
         products, addProduct, updateProduct, deleteProduct,
         cart, addToCart, removeFromCart, updateCartQuantity, clearCart, cartSubtotal, cartTax, cartDiscount, cartTotal, cartCount,
-        user, users, login, register, logout, addUser, updateUser, deleteUser, updateProfile, updatePassword, updateShippingInfo,
+        user, users, login, register, logout, addUser, updateUser, deleteUser, updateProfile, updatePassword, updateShippingInfo, setPin, updatePin,
         walletTransactions, requestWalletFunds, approveWalletTransaction, rejectWalletTransaction,
         wishlist, toggleWishlist, isInWishlist, wishlistCount,
         stores, addStore, createStore, updateStore,

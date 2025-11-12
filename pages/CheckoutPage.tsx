@@ -2,20 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import AnimatedPage from '../components/ui/AnimatedPage';
 import Breadcrumb from '../components/ui/Breadcrumb';
-import { Lock, CreditCard, Banknote, Landmark, Wallet, User, Mail, Home, Phone, Trash2 } from 'lucide-react';
+import { Lock, CreditCard, Banknote, Landmark, Wallet, User, Mail, Home, Phone, Trash2, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShippingInfo, PaymentMethod } from '../types';
 import toast from 'react-hot-toast';
 import Button from '../components/ui/Button';
+import InputField from '../components/ui/InputField';
 
 const CheckoutPage: React.FC = () => {
-    const { cart, cartSubtotal, cartTax, cartDiscount, cartTotal, user, placeOrder, applyCoupon, removeCoupon, appliedCoupon, orders } = useAppContext();
+    const { cart, cartSubtotal, cartTax, cartDiscount, cartTotal, user, placeOrder, applyCoupon, removeCoupon, appliedCoupon, orders, setPin: createUserPin } = useAppContext();
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
     const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
     const [couponCodeInput, setCouponCodeInput] = useState('');
     const [saveInfo, setSaveInfo] = useState(true);
+    const [pin, setPin] = useState('');
+
+    const [createPinData, setCreatePinData] = useState({
+        newPin: '',
+        confirmPin: '',
+        currentPassword: '',
+    });
+    const [isCreatingPin, setIsCreatingPin] = useState(false);
 
     const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
         firstName: '',
@@ -42,6 +51,7 @@ const CheckoutPage: React.FC = () => {
     }, [user, orders]);
 
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('COD');
+    const userHasPin = !!user?.pin;
 
     const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setShippingInfo(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -59,6 +69,25 @@ const CheckoutPage: React.FC = () => {
         setCouponCodeInput('');
         setIsApplyingCoupon(false);
     };
+    
+    const handleCreatePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setCreatePinData(prev => ({ ...prev, [name]: value.replace(/[^0-9]/g, '') }));
+    };
+
+    const handleCreatePinPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCreatePinData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+    
+    const handleCreatePinSubmit = async () => {
+        const { newPin, confirmPin, currentPassword } = createPinData;
+        setIsCreatingPin(true);
+        const success = await createUserPin(newPin, confirmPin, currentPassword);
+        setIsCreatingPin(false);
+        if (success) {
+            setCreatePinData({ newPin: '', confirmPin: '', currentPassword: '' });
+        }
+    };
 
     const handlePlaceOrder = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,6 +96,17 @@ const CheckoutPage: React.FC = () => {
             toast.error('Please fill out all required shipping details.');
             return;
         }
+
+        if (!user?.pin) {
+            toast.error('Please create a security PIN before placing an order.');
+            return;
+        }
+        
+        if (pin !== user.pin) {
+            toast.error('Incorrect security PIN.');
+            return;
+        }
+
         setIsLoading(true);
         const success = await placeOrder(shippingInfo, paymentMethod, saveInfo);
         setIsLoading(false);
@@ -101,15 +141,6 @@ const CheckoutPage: React.FC = () => {
         { id: 'Wallet', title: 'Pay with Wallet', subtitle: `Balance: ₱${walletBalance.toFixed(2)}`, icon: <Wallet className="h-6 w-6 text-slate-600" />, disabled: !canPayWithWallet, disabledText: `Add ₱${(cartTotal - walletBalance).toFixed(2)} to use.` },
         { id: 'COD', title: 'Cash on Delivery', icon: <Banknote className="h-6 w-6 text-slate-600" /> },
     ];
-
-    const InputField = ({ icon, ...props }: any) => (
-        <div className="relative">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                {icon}
-            </div>
-            <input {...props} className="block w-full rounded-md border-slate-300 bg-slate-100/50 py-3 pl-10 pr-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-        </div>
-    );
 
     return (
         <AnimatedPage>
@@ -146,7 +177,7 @@ const CheckoutPage: React.FC = () => {
                                 </div>
                                 <div className="sm:col-span-2">
                                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">Email address</label>
-                                    <InputField icon={<Mail className="h-5 w-5 text-slate-400"/>} type="email" name="email" id="email" value={user?.email || ''} readOnly className="bg-slate-200 cursor-not-allowed"/>
+                                    <InputField icon={<Mail className="h-5 w-5 text-slate-400"/>} type="email" name="email" id="email" value={user?.email || ''} readOnly />
                                 </div>
                             </div>
                             {user && (
@@ -268,8 +299,68 @@ const CheckoutPage: React.FC = () => {
                                 </div>
                             </dl>
 
+                            <div className="mt-6 border-t border-slate-200 pt-6">
+                                <h3 className="text-sm font-medium text-slate-900">Security Verification</h3>
+                                {userHasPin ? (
+                                    <div className="mt-2">
+                                        <InputField
+                                            icon={<ShieldCheck className="h-5 w-5 text-slate-400"/>}
+                                            type="password"
+                                            name="pin"
+                                            id="pin"
+                                            value={pin}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+                                            placeholder="6-Digit PIN"
+                                            maxLength={6}
+                                            autoComplete="off"
+                                            required
+                                        />
+                                        <p className="text-xs text-slate-500 mt-1">Enter your 6-digit security PIN to confirm your order.</p>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 space-y-3 bg-indigo-50 p-4 rounded-md border border-indigo-200">
+                                        <p className="text-sm text-indigo-800 font-semibold">Create a security PIN to proceed.</p>
+                                        <InputField
+                                            icon={<ShieldCheck className="h-5 w-5 text-slate-400"/>}
+                                            type="password"
+                                            name="newPin"
+                                            value={createPinData.newPin}
+                                            onChange={handleCreatePinChange}
+                                            placeholder="New 6-Digit PIN"
+                                            maxLength={6}
+                                            autoComplete="off"
+                                            required
+                                        />
+                                        <InputField
+                                            icon={<ShieldCheck className="h-5 w-5 text-slate-400"/>}
+                                            type="password"
+                                            name="confirmPin"
+                                            value={createPinData.confirmPin}
+                                            onChange={handleCreatePinChange}
+                                            placeholder="Confirm 6-Digit PIN"
+                                            maxLength={6}
+                                            autoComplete="off"
+                                            required
+                                        />
+                                        <InputField
+                                            icon={<Lock className="h-5 w-5 text-slate-400"/>}
+                                            type="password"
+                                            name="currentPassword"
+                                            value={createPinData.currentPassword}
+                                            onChange={handleCreatePinPasswordChange}
+                                            placeholder="Current Account Password"
+                                            autoComplete="current-password"
+                                            required
+                                        />
+                                         <Button type="button" onClick={handleCreatePinSubmit} isLoading={isCreatingPin} className="w-full bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500">
+                                            Create & Save PIN
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="mt-6">
-                                <Button type="submit" isLoading={isLoading} className="w-full bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500">
+                                <Button type="submit" isLoading={isLoading} disabled={!userHasPin || isLoading} className="w-full bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500">
                                     Place Order
                                 </Button>
                             </div>

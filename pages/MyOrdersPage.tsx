@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import ReviewModal from '../components/reviews/ReviewModal';
 import AnnouncementBanner from '../components/ui/AnnouncementBanner';
 import Button from '../components/ui/Button';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 
 const getStatusAppearance = (status: OrderStatus) => {
     switch (status) {
@@ -45,9 +46,12 @@ const getStatusAppearance = (status: OrderStatus) => {
     }
 };
 
-const OrderCard: React.FC<{ order: Order; onReviewClick: (item: OrderItem) => void; }> = ({ order, onReviewClick }) => {
-    const { stores, cancelOrder, user, reviews } = useAppContext();
-    const [isCancelling, setIsCancelling] = useState(false);
+const OrderCard: React.FC<{
+    order: Order;
+    onReviewClick: (item: OrderItem) => void;
+    onCancelClick: (order: Order) => void;
+}> = ({ order, onReviewClick, onCancelClick }) => {
+    const { stores, user, reviews } = useAppContext();
     const store = stores.find(s => s.id === order.storeId);
     
     const { header, badge, icon } = getStatusAppearance(order.status);
@@ -55,17 +59,13 @@ const OrderCard: React.FC<{ order: Order; onReviewClick: (item: OrderItem) => vo
     const hasUserReviewed = (productId: string) => {
         return reviews.some(review => review.productId === productId && review.userId === user?.id);
     };
-    
-    const handleCancel = async () => {
-        setIsCancelling(true);
-        await cancelOrder(order.id);
-        setIsCancelling(false);
-    };
 
     return (
         <motion.div
+            layout
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
             className="bg-slate-100/80 backdrop-blur-md border border-slate-200 rounded-lg shadow-md overflow-hidden"
         >
             <div className={`p-4 border-b ${header} flex justify-between items-start`}>
@@ -134,42 +134,91 @@ const OrderCard: React.FC<{ order: Order; onReviewClick: (item: OrderItem) => vo
                 </div>
             </div>
 
-            {order.status === 'Pending' && (
-                 <div className="p-4 bg-slate-50/50 border-t text-right">
+            <div className="p-4 bg-slate-50/50 border-t flex justify-end items-center gap-4">
+                <Link to={`/invoice/${order.id}`}>
+                    <Button className="bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm focus:ring-indigo-500">View Invoice</Button>
+                </Link>
+                {order.status === 'Pending' && (
                     <Button 
-                        onClick={handleCancel}
-                        isLoading={isCancelling}
+                        onClick={() => onCancelClick(order)}
                         className="bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
                     >
                         Cancel Order
                     </Button>
-                 </div>
-            )}
+                )}
+            </div>
         </motion.div>
     );
 };
 
 const MyOrdersPage: React.FC = () => {
-    const { user, orders } = useAppContext();
+    const { user, orders, cancelOrder } = useAppContext();
     const [reviewModalState, setReviewModalState] = useState<{isOpen: boolean; product: OrderItem | null}>({ isOpen: false, product: null });
-
-    const myOrders = useMemo(() => {
-        if (!user) return [];
-        return orders.filter(o => o.userId === user.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [user, orders]);
     
-    const crumbs = [
-        { name: 'Home', path: '/' },
-        { name: 'My Orders', path: '/my-orders' }
-    ];
+    // Feature states
+    const [filterStatus, setFilterStatus] = useState<OrderStatus | 'all'>('all');
+    const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'total-desc' | 'total-asc'>('date-desc');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+    const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
+    const [isCancelling, setIsCancelling] = useState(false);
 
-    const openReviewModal = (product: OrderItem) => {
-        setReviewModalState({ isOpen: true, product });
+    const ORDERS_PER_PAGE = 5;
+
+    const processedOrders = useMemo(() => {
+        if (!user) return [];
+        let userOrders = orders.filter(o => o.userId === user.id);
+        
+        if (filterStatus !== 'all') {
+            userOrders = userOrders.filter(o => o.status === filterStatus);
+        }
+
+        userOrders.sort((a, b) => {
+            switch (sortBy) {
+                case 'date-asc': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                case 'total-desc': return b.total - a.total;
+                case 'total-asc': return a.total - b.total;
+                case 'date-desc':
+                default: return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            }
+        });
+        return userOrders;
+    }, [user, orders, filterStatus, sortBy]);
+
+    const totalPages = Math.ceil(processedOrders.length / ORDERS_PER_PAGE);
+    const paginatedOrders = processedOrders.slice((currentPage - 1) * ORDERS_PER_PAGE, currentPage * ORDERS_PER_PAGE);
+
+    const handlePageChange = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+    
+    const openReviewModal = (product: OrderItem) => { setReviewModalState({ isOpen: true, product }); };
+    const closeReviewModal = () => { setReviewModalState({ isOpen: false, product: null }); };
+
+    const openCancelModal = (order: Order) => {
+        setOrderToCancel(order);
+        setIsCancelModalOpen(true);
     };
 
-    const closeReviewModal = () => {
-        setReviewModalState({ isOpen: false, product: null });
+    const closeCancelModal = () => {
+        setOrderToCancel(null);
+        setIsCancelModalOpen(false);
     };
+
+    const handleConfirmCancel = async () => {
+        if (orderToCancel) {
+            setIsCancelling(true);
+            await cancelOrder(orderToCancel.id);
+            setIsCancelling(false);
+            closeCancelModal();
+        }
+    };
+
+    const crumbs = [ { name: 'Home', path: '/' }, { name: 'My Orders', path: '/my-orders' }];
+    const orderStatuses: (OrderStatus | 'all')[] = ['all', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+    const totalUserOrders = useMemo(() => orders.filter(o => o.userId === user?.id).length, [orders, user]);
 
     return (
         <AnimatedPage>
@@ -179,7 +228,7 @@ const MyOrdersPage: React.FC = () => {
                     <AnnouncementBanner />
                     <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 my-8">My Orders</h1>
                     
-                    {myOrders.length === 0 ? (
+                    {totalUserOrders === 0 ? (
                         <div className="text-center py-16 bg-slate-100/80 backdrop-blur-md border border-slate-200 rounded-lg shadow-md">
                            <PackageX className="mx-auto h-16 w-16 text-slate-300" />
                            <p className="mt-4 text-lg text-slate-500">You haven't placed any orders yet.</p>
@@ -191,11 +240,48 @@ const MyOrdersPage: React.FC = () => {
                            </Link>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-8">
-                            {myOrders.map(order => (
-                                <OrderCard key={order.id} order={order} onReviewClick={openReviewModal} />
-                            ))}
-                        </div>
+                        <>
+                            <div className="flex flex-col sm:flex-row gap-4 mb-8 p-4 bg-slate-100/80 rounded-lg shadow-sm border border-slate-200">
+                                <div className="flex-1">
+                                    <label htmlFor="filter-status" className="block text-sm font-medium text-slate-700 mb-1">Filter by status</label>
+                                    <select id="filter-status" value={filterStatus} onChange={e => { setCurrentPage(1); setFilterStatus(e.target.value as OrderStatus | 'all'); }} className="w-full p-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50">
+                                        {orderStatuses.map(status => (
+                                            <option key={status} value={status} className="capitalize">{status === 'all' ? 'All Orders' : status}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex-1">
+                                    <label htmlFor="sort-by" className="block text-sm font-medium text-slate-700 mb-1">Sort by</label>
+                                    <select id="sort-by" value={sortBy} onChange={e => { setCurrentPage(1); setSortBy(e.target.value as any); }} className="w-full p-2 border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50">
+                                        <option value="date-desc">Newest First</option>
+                                        <option value="date-asc">Oldest First</option>
+                                        <option value="total-desc">Total: High to Low</option>
+                                        <option value="total-asc">Total: Low to High</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <motion.div layout className="grid grid-cols-1 gap-8">
+                                {paginatedOrders.length === 0 ? (
+                                    <div className="text-center py-16 bg-slate-100/80 rounded-lg">
+                                       <PackageX className="mx-auto h-16 w-16 text-slate-300" />
+                                       <p className="mt-4 text-lg text-slate-500">No orders match your current filters.</p>
+                                    </div>
+                                ) : (
+                                    paginatedOrders.map(order => (
+                                        <OrderCard key={order.id} order={order} onReviewClick={openReviewModal} onCancelClick={openCancelModal} />
+                                    ))
+                                )}
+                            </motion.div>
+                            
+                            {totalPages > 1 && (
+                                <nav className="mt-12 flex items-center justify-between border-t border-slate-200 pt-6">
+                                    <Button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="bg-white text-slate-700 border-slate-300 hover:bg-slate-50">Previous</Button>
+                                    <span className="text-sm font-medium text-slate-600">Page {currentPage} of {totalPages}</span>
+                                    <Button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="bg-white text-slate-700 border-slate-300 hover:bg-slate-50">Next</Button>
+                                </nav>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -206,6 +292,15 @@ const MyOrdersPage: React.FC = () => {
                   product={reviewModalState.product}
               />
             )}
+             <ConfirmationModal
+                isOpen={isCancelModalOpen}
+                onClose={closeCancelModal}
+                onConfirm={handleConfirmCancel}
+                isConfirming={isCancelling}
+                title="Cancel Order"
+                message={`Are you sure you want to cancel this order (#${orderToCancel?.id.split('-')[1]})? This action cannot be undone.`}
+                confirmText="Yes, Cancel"
+            />
         </AnimatedPage>
     );
 };

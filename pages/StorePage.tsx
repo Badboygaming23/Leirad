@@ -232,7 +232,7 @@ const StorePage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="fixed inset-y-0 left-0 w-80 bg-slate-100 shadow-lg p-6 overflow-y-auto"
+              className="fixed inset-y-0 left-0 w-80 bg-slate-100/80 backdrop-blur-md border-r border-slate-200 shadow-lg p-6 overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">

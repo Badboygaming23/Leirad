@@ -10,6 +10,7 @@ export interface User {
   password?: string; // For simulation
   walletBalance?: number;
   savedShippingInfo?: ShippingInfo;
+  pin?: string;
 }
 
 export interface Store {
@@ -135,7 +136,10 @@ export interface ResellerApplication {
   id: string;
   userId: string;
   userEmail: string;
-  reason: string;
+  storeName: string;
+  storeDescription: string;
+  storeLogoUrl: string;
+  shippingInfo: ShippingInfo;
   status: ResellerApplicationStatus;
   createdAt: string; // ISO Date string
 }

@@ -25,6 +25,8 @@ import { Search } from 'lucide-react';
 import { Product, Store } from './types';
 import MyProfilePage from './pages/MyProfilePage';
 import AnimatedBackground from './components/ui/AnimatedBackground';
+import BecomeAResellerPage from './pages/BecomeAResellerPage';
+import InvoicePage from './pages/InvoicePage';
 
 // Global Search Modal Component
 const SearchModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
@@ -193,6 +195,11 @@ const App: React.FC = () => {
                     <MyOrdersPage />
                   </ProtectedRoute>
                 } />
+                 <Route path="/invoice/:orderId" element={
+                  <ProtectedRoute allowedRoles={['customer', 'reseller', 'admin']}>
+                    <InvoicePage />
+                  </ProtectedRoute>
+                } />
                 <Route path="/my-wallet" element={
                   <ProtectedRoute allowedRoles={['customer', 'reseller', 'admin']}>
                     <MyWalletPage />
@@ -201,6 +208,11 @@ const App: React.FC = () => {
                  <Route path="/profile" element={
                   <ProtectedRoute allowedRoles={['customer', 'reseller', 'admin']}>
                     <MyProfilePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/become-a-reseller" element={
+                  <ProtectedRoute allowedRoles={['customer']}>
+                    <BecomeAResellerPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin" element={

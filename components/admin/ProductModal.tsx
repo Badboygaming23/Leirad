@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product } from '../../types';
 import Modal from '../ui/Modal';
 import { useAppContext } from '../../context/AppContext';
 import Button from '../ui/Button';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -14,8 +16,13 @@ interface ProductModalProps {
 }
 
 const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, defaultValues, mode, resellerStoreId }) => {
-  const { stores } = useAppContext();
+  const { stores, products } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
+  
+  const uniqueCategories = useMemo(() => {
+    const categories = new Set(products.map(p => p.category));
+    return Array.from(categories).sort();
+  }, [products]);
 
   const getInitialState = () => ({
     name: '',
@@ -28,20 +35,29 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
 
   const [formData, setFormData] = useState(getInitialState());
   const [imageUrlsText, setImageUrlsText] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   
   const isAdminAndNoStores = !resellerStoreId && stores.length === 0;
+  const isNewCategory = formData.category === '--new--';
 
   useEffect(() => {
     if (isOpen) {
       if (mode === 'edit' && defaultValues) {
         setFormData({ ...defaultValues });
         setImageUrlsText(defaultValues.imageUrls.join(', '));
+        if (!uniqueCategories.includes(defaultValues.category)) {
+          setFormData(prev => ({...prev, category: '--new--'}));
+          setCustomCategory(defaultValues.category);
+        } else {
+          setCustomCategory('');
+        }
       } else {
         setFormData(getInitialState());
         setImageUrlsText('');
+        setCustomCategory('');
       }
     }
-  }, [isOpen, defaultValues, mode, stores, resellerStoreId]);
+  }, [isOpen, defaultValues, mode, stores, resellerStoreId, uniqueCategories]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -58,7 +74,15 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
     
     setIsLoading(true);
     const urls = imageUrlsText.split(',').map(url => url.trim()).filter(url => url);
-    let finalData = { ...defaultValues, ...formData, imageUrls: urls };
+    const category = isNewCategory ? customCategory : formData.category;
+    
+    if (!category) {
+        toast.error("Please select or create a category.");
+        setIsLoading(false);
+        return;
+    }
+
+    let finalData = { ...defaultValues, ...formData, imageUrls: urls, category };
     if (resellerStoreId) {
         finalData.storeId = resellerStoreId;
     }
@@ -88,7 +112,33 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700">Category</label>
-                <input type="text" name="category" value={formData.category} onChange={handleChange} placeholder="Category" required className="mt-1 block w-full p-2 border rounded-md disabled:bg-gray-200" />
+                <select 
+                    name="category" 
+                    value={isNewCategory ? '--new--' : formData.category}
+                    onChange={handleChange}
+                    required
+                    className="mt-1 block w-full p-2 border rounded-md disabled:bg-gray-200"
+                >
+                    <option value="" disabled>Select a category</option>
+                    {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    <option value="--new--">Add New Category...</option>
+                </select>
+                {isNewCategory && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginTop: '0.5rem' }}
+                        className="overflow-hidden"
+                    >
+                        <input 
+                            type="text" 
+                            value={customCategory} 
+                            onChange={e => setCustomCategory(e.target.value)} 
+                            placeholder="New category name" 
+                            required 
+                            className="block w-full p-2 border rounded-md"
+                        />
+                    </motion.div>
+                )}
             </div>
             
             {!resellerStoreId && (

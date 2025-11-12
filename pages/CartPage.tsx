@@ -7,13 +7,16 @@ import { Plus, Minus, Trash2, ShoppingCart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import Button from '../components/ui/Button';
+import toast from 'react-hot-toast';
 
 const CartPage: React.FC = () => {
-  const { cart, cartSubtotal, cartTax, cartTotal, updateCartQuantity, removeFromCart } = useAppContext();
+  const { cart, cartSubtotal, cartTax, cartTotal, updateCartQuantity, removeFromCart, applyCoupon, removeCoupon, appliedCoupon, cartDiscount } = useAppContext();
   const navigate = useNavigate();
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const handleCheckout = () => {
     navigate('/checkout');
@@ -36,6 +39,22 @@ const CartPage: React.FC = () => {
   const closeConfirmationModal = () => {
     setIsConfirmModalOpen(false);
     setProductToDelete(null);
+  };
+  
+  const handleApplyCoupon = async () => {
+    if (!couponCodeInput) {
+        toast.error("Please enter a coupon code.");
+        return;
+    }
+    setIsApplyingCoupon(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    applyCoupon(couponCodeInput);
+    setIsApplyingCoupon(false);
+    setCouponCodeInput('');
+  };
+
+  const handleRemoveCoupon = () => {
+      removeCoupon();
   };
 
   const productBeingDeleted = productToDelete ? cart.find(p => p.id === productToDelete) : null;
@@ -132,11 +151,50 @@ const CartPage: React.FC = () => {
                 className="mt-16 bg-slate-100/80 backdrop-blur-md rounded-lg px-4 py-6 sm:p-6 lg:p-8 lg:mt-0 lg:col-span-5 border border-slate-200"
               >
                 <h2 id="summary-heading" className="text-lg font-medium text-slate-900">Order summary</h2>
+                
+                <div className="mt-6 border-t border-b border-slate-200 py-6">
+                    <h3 className="text-sm font-medium text-slate-900">Have a coupon?</h3>
+                    {appliedCoupon ? (
+                        <div className="mt-2 flex items-center justify-between bg-green-50 p-3 rounded-md">
+                            <p className="text-sm text-green-800">Coupon applied: <span className="font-bold">{appliedCoupon.code}</span></p>
+                            <button onClick={handleRemoveCoupon} className="text-red-600 hover:text-red-800">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="mt-2 flex gap-2">
+                            <input
+                                type="text"
+                                value={couponCodeInput}
+                                onChange={(e) => setCouponCodeInput(e.target.value.toUpperCase())}
+                                placeholder="Enter coupon code"
+                                className="block w-full rounded-md border-slate-300 bg-slate-50 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            />
+                            <Button type="button" onClick={handleApplyCoupon} isLoading={isApplyingCoupon} className="bg-slate-700 text-white hover:bg-slate-800 focus:ring-slate-500">
+                                Apply
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
                 <dl className="mt-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <dt className="text-sm text-slate-600">Subtotal</dt>
                     <dd className="text-sm font-medium text-slate-900">₱{cartSubtotal.toFixed(2)}</dd>
                   </div>
+                  <AnimatePresence>
+                      {cartDiscount > 0 && (
+                          <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="flex items-center justify-between text-green-600"
+                          >
+                              <dt className="text-sm">Discount ({appliedCoupon?.code})</dt>
+                              <dd className="text-sm font-medium">-₱{cartDiscount.toFixed(2)}</dd>
+                          </motion.div>
+                      )}
+                  </AnimatePresence>
                   <div className="flex items-center justify-between">
                     <dt className="text-sm text-slate-600">Tax (4%)</dt>
                     <dd className="text-sm font-medium text-slate-900">₱{cartTax.toFixed(2)}</dd>

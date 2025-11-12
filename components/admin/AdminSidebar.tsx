@@ -32,7 +32,8 @@ const SidebarContent: React.FC<{
                     }`}
                     aria-label={tab.name}
                 >
-                    {tab.icon}
+                    {/* FIX: Use a generic type with `React.isValidElement` to help TypeScript infer the props of the icon, allowing `size` to be passed to `React.cloneElement`. */}
+                    {React.isValidElement<{ size?: number }>(tab.icon) && React.cloneElement(tab.icon, { size: (isCollapsed && !isMobile) ? 24 : 20 })}
                     {(!isCollapsed || isMobile) && <span className="whitespace-nowrap">{tab.name}</span>}
                 </button>
                 {(isCollapsed && !isMobile) && (

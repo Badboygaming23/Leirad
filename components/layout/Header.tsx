@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingBag, User as UserIcon, Menu, X, Shield, Heart, Store, Package, Wallet, Search } from 'lucide-react';
+import { ShoppingBag, User as UserIcon, Menu, X, Shield, Heart, Store, Package, Wallet, Search, LogOut } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../ui/ConfirmationModal';
@@ -13,7 +13,22 @@ const Header: React.FC<HeaderProps> = ({ openSearch }) => {
   const { cartCount, user, logout, wishlistCount } = useAppContext();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+            setIsUserMenuOpen(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleLogoutClick = () => {
     setIsLogoutModalOpen(true);
@@ -76,24 +91,37 @@ const Header: React.FC<HeaderProps> = ({ openSearch }) => {
               </button>
               <div className="hidden md:flex items-center space-x-4">
                 {user ? (
-                  <div className="relative group">
-                    <button className="flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600">
-                      <UserIcon className="h-5 w-5 mr-1"/> {user.email}
+                  <div className="relative" ref={userMenuRef}>
+                    <button
+                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                      className="flex items-center text-sm font-medium text-slate-500 hover:text-indigo-600"
+                    >
+                      <UserIcon className="h-5 w-5 mr-1" /> {user.email}
                     </button>
-                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto z-20 border">
-                       <Link to="/profile" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                          <UserIcon size={16} /> My Profile
-                       </Link>
-                       <Link to="/my-orders" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                          <Package size={16} /> My Orders
-                       </Link>
-                       <Link to="/my-wallet" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                          <Wallet size={16} /> My Wallet
-                       </Link>
-                       <button onClick={handleLogoutClick} className="block w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                        Logout
-                      </button>
-                    </div>
+                    <AnimatePresence>
+                      {isUserMenuOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                          transition={{ duration: 0.15, ease: 'easeOut' }}
+                          className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 border"
+                        >
+                          <Link to="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <UserIcon size={16} /> My Profile
+                          </Link>
+                          <Link to="/my-orders" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <Package size={16} /> My Orders
+                          </Link>
+                          <Link to="/my-wallet" onClick={() => setIsUserMenuOpen(false)} className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <Wallet size={16} /> My Wallet
+                          </Link>
+                          <button onClick={() => { handleLogoutClick(); setIsUserMenuOpen(false); }} className="flex items-center gap-2 w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <LogOut size={16} /> Logout
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 ) : (
                   <Link to="/login" className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors">
@@ -166,17 +194,17 @@ const Header: React.FC<HeaderProps> = ({ openSearch }) => {
                 <div className="border-t border-slate-200 pt-4 mt-4 px-3">
                   {user ? (
                      <>
-                      <Link to="/profile" className="block py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
-                          My Profile
+                      <Link to="/profile" className="flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
+                          <UserIcon size={20} /> My Profile
                       </Link>
-                      <Link to="/my-orders" className="block py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
-                          My Orders
+                      <Link to="/my-orders" className="flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
+                          <Package size={20} /> My Orders
                       </Link>
-                      <Link to="/my-wallet" className="block py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
-                          My Wallet
+                      <Link to="/my-wallet" className="flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => setIsMenuOpen(false)}>
+                          <Wallet size={20} /> My Wallet
                       </Link>
-                      <button onClick={() => { handleLogoutClick(); setIsMenuOpen(false);}} className="w-full text-left block py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900">
-                        Logout ({user.email})
+                      <button onClick={() => { handleLogoutClick(); setIsMenuOpen(false);}} className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900">
+                        <LogOut size={20} /> Logout
                       </button>
                      </>
                   ) : (

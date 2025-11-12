@@ -4,7 +4,7 @@ import { useAppContext } from '../../context/AppContext';
 import { Product, User, Store, CarouselSlide, Advertisement, Order, OrderStatus, Announcement, WalletTransaction, WalletTransactionStatus, Coupon, ResellerApplication, ResellerApplicationStatus } from '../types';
 import AnimatedPage from '../components/ui/AnimatedPage';
 import Breadcrumb from '../components/ui/Breadcrumb';
-import { Users, ShoppingBag, Home, MonitorPlay, Megaphone, Plus, Package, Bell, LayoutDashboard, Wallet, Check, X, Ticket, Menu, Briefcase, ClipboardCheck } from 'lucide-react';
+import { Users, ShoppingBag, Home, MonitorPlay, Megaphone, Plus, Package, Bell, LayoutDashboard, Wallet, Check, X, Ticket, Menu, Briefcase, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import ConfirmationModal from '../components/ui/ConfirmationModal';
@@ -19,10 +19,11 @@ import CouponModal from '../components/admin/CouponModal';
 import DashboardOverview from './admin/DashboardOverview';
 import OrderDetailsModal from '../components/admin/OrderDetailsModal';
 import AdminSidebar from '../components/admin/AdminSidebar';
+import ResellerApplicationModal from '../components/admin/ResellerApplicationModal';
 
 type AdminTab = 'overview' | 'users' | 'stores' | 'products' | 'carousel' | 'ads' | 'orders' | 'announcements' | 'wallet' | 'coupons' | 'resellerApps';
 type ModalMode = 'add' | 'edit';
-type ModalType = Exclude<AdminTab, 'overview'>;
+type ModalType = Exclude<AdminTab, 'overview'|'resellerApps'>;
 
 interface ModalState {
   isOpen: boolean;
@@ -51,13 +52,13 @@ const AdminPage: React.FC = () => {
     const [modalState, setModalState] = useState<ModalState>({ isOpen: false, mode: 'add', type: null, data: null });
     const [itemToDelete, setItemToDelete] = useState<any | null>(null);
     const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
+    const [viewingApplication, setViewingApplication] = useState<ResellerApplication | null>(null);
     const [isLoadingConfirm, setIsLoadingConfirm] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true); // Collapsed by default
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // For mobile view
     
     const [transactionToConfirm, setTransactionToConfirm] = useState<{ id: string, action: 'approve' | 'reject' } | null>(null);
-    const [applicationToConfirm, setApplicationToConfirm] = useState<{ id: string, action: 'approve' | 'reject' } | null>(null);
-
+    
     const tabs: { id: AdminTab; name: string; icon: React.ReactNode; data?: any[]; columns?: any[], canAdd?: boolean, canDelete?: boolean }[] = useMemo(() => [
         { id: 'overview', name: 'Overview', icon: <LayoutDashboard size={20} /> },
         { 
@@ -112,15 +113,9 @@ const AdminPage: React.FC = () => {
             id: 'resellerApps', name: 'Reseller Apps', icon: <Briefcase size={20} />, data: context.resellerApplications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), canAdd: false, canDelete: false,
             columns: [
                 { header: 'Applicant', accessor: 'userEmail' },
-                { header: 'Reason', accessor: 'reason', render: (item: ResellerApplication) => <p className="line-clamp-2 text-xs w-48">{item.reason}</p> },
+                { header: 'Proposed Store', accessor: 'storeName' },
                 { header: 'Date', accessor: 'createdAt', render: (item: ResellerApplication) => new Date(item.createdAt).toLocaleString() },
                 { header: 'Status', accessor: 'status', render: (item: ResellerApplication) => <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(item.status)}`}>{item.status}</span> },
-                { header: 'Actions', accessor: 'actions', render: (item: ResellerApplication) => item.status === 'pending' && (
-                    <div className="flex gap-2">
-                        <button onClick={() => setApplicationToConfirm({ id: item.id, action: 'approve' })} className="p-1 text-green-600 hover:text-green-800"><ClipboardCheck size={16} /></button>
-                        <button onClick={() => setApplicationToConfirm({ id: item.id, action: 'reject' })} className="p-1 text-red-600 hover:text-red-800"><X size={16} /></button>
-                    </div>
-                )}
             ]
         },
         {
@@ -201,16 +196,14 @@ const AdminPage: React.FC = () => {
         setTransactionToConfirm(null);
     };
 
-    const handleConfirmApplication = async () => {
-        if (!applicationToConfirm) return;
-        setIsLoadingConfirm(true);
-        if (applicationToConfirm.action === 'approve') {
-            await context.approveResellerApplication(applicationToConfirm.id);
-        } else {
-            await context.rejectResellerApplication(applicationToConfirm.id);
-        }
-        setIsLoadingConfirm(false);
-        setApplicationToConfirm(null);
+    const handleApproveApplication = async (id: string) => {
+        await context.approveResellerApplication(id);
+        setViewingApplication(null);
+    };
+
+    const handleRejectApplication = async (id: string) => {
+        await context.rejectResellerApplication(id);
+        setViewingApplication(null);
     };
 
     const handleViewOrder = (order: Order) => setViewingOrder(order);
@@ -221,6 +214,16 @@ const AdminPage: React.FC = () => {
       setActiveTab(tabId as AdminTab);
       setIsMobileSidebarOpen(false);
     };
+    
+    const handleDataTableRowClick = (item: any) => {
+        if (activeTab === 'orders') {
+            handleViewOrder(item);
+        } else if (activeTab === 'resellerApps') {
+            setViewingApplication(item);
+        } else {
+            openModal(activeTabData?.id as ModalType, 'edit', item);
+        }
+    }
 
     return (
         <AnimatedPage>
@@ -266,7 +269,7 @@ const AdminPage: React.FC = () => {
                                     <DataTable 
                                         columns={activeTabData.columns} 
                                         data={activeTabData.data}
-                                        onEdit={(item) => activeTab === 'orders' ? handleViewOrder(item) : openModal(activeTabData.id as ModalType, 'edit', item)}
+                                        onEdit={handleDataTableRowClick}
                                         onDelete={activeTabData.canDelete ? openDeleteConfirm : undefined}
                                     />
                                 )}
@@ -284,7 +287,15 @@ const AdminPage: React.FC = () => {
             {modalState.isOpen && modalState.type === 'ads' && <AdModal isOpen={modalState.isOpen} onClose={closeModal} onSubmit={handleSubmit} defaultValues={modalState.data} mode={modalState.mode} />}
             {modalState.isOpen && modalState.type === 'announcements' && <AnnouncementModal isOpen={modalState.isOpen} onClose={closeModal} onSubmit={handleSubmit} defaultValues={modalState.data} mode={modalState.mode} />}
             {modalState.isOpen && modalState.type === 'coupons' && <CouponModal isOpen={modalState.isOpen} onClose={closeModal} onSubmit={handleSubmit} defaultValues={modalState.data} mode={modalState.mode} />}
+            
             <OrderDetailsModal isOpen={!!viewingOrder} onClose={() => setViewingOrder(null)} order={viewingOrder} />
+            <ResellerApplicationModal 
+                isOpen={!!viewingApplication} 
+                onClose={() => setViewingApplication(null)} 
+                application={viewingApplication}
+                onApprove={handleApproveApplication}
+                onReject={handleRejectApplication}
+            />
 
             <ConfirmationModal
                 isOpen={!!itemToDelete}
@@ -303,15 +314,6 @@ const AdminPage: React.FC = () => {
                 title={`${transactionToConfirm?.action === 'approve' ? 'Approve' : 'Reject'} Transaction`}
                 message={`Are you sure you want to ${transactionToConfirm?.action} this transaction?`}
                 confirmText={transactionToConfirm?.action === 'approve' ? 'Approve' : 'Reject'}
-            />
-             <ConfirmationModal
-                isOpen={!!applicationToConfirm}
-                onClose={() => setApplicationToConfirm(null)}
-                onConfirm={handleConfirmApplication}
-                isConfirming={isLoadingConfirm}
-                title={`${applicationToConfirm?.action === 'approve' ? 'Approve' : 'Reject'} Application`}
-                message={`Are you sure you want to ${applicationToConfirm?.action} this reseller application?`}
-                confirmText={applicationToConfirm?.action === 'approve' ? 'Approve' : 'Reject'}
             />
         </AnimatedPage>
     );
