@@ -212,7 +212,7 @@ const CartPage: React.FC = () => {
                     Checkout
                   </button>
                 </div>
-              </section>
+              </motion.section>
             </div>
           )}
         </AnimatePresence>
